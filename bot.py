@@ -16,6 +16,7 @@ load_dotenv()
 class TradingBot:
 	def __init__(self, testnet):
 		self.connectToBinance(testnet)
+		pprint(self.getAccountInfo())
 
 	def connectToBinance(self, testnet):
 		client = Spot()
@@ -34,6 +35,9 @@ class TradingBot:
 		self.client = client
 		self.ws_client = ws_client
 
+	def getAccountInfo(self):
+		return self.client.account()
+
 	def getData(self, symbol, interval, limit):
 		frame = pd.DataFrame(self.client.klines(symbol.upper(), interval, limit=limit))
 		frame = frame.iloc[:,:6]
@@ -50,38 +54,51 @@ class TradingBot:
 		Sell if asset rises by more than 0.15% or falls further by 0.15%
 		'''
 		df = self.getData(symbol, '1m', 30)
-		print(df)
 		cumulative_returns = (df.Open.pct_change() + 1).cumprod() - 1
-
-		if not entried:
-			if cumulative_returns[-1] > -0.002:
-				order = self.client.new_order(
-					symbol=symbol,
-					side='BUY',
-					type='MARKET',
-					quantity=quantity
-				)
-				print(order)
-				entried = True
-			else:
-				print('No Trade has been executed')
 		
-		if entried:
-			while True:
-				df = self.getData(symbol, '1m', 30)
-				since_buy = df.loc[df.index > pd.to_datetime(order['transactTime'], unit='ms')]
-				if len(since_buy) > 0:
-					since_buy_return = (since_buy.Open.pct_change() + 1).cumprod() - 1
-					if since_buy_return[-1] > 0.0015 or since_buy_return[-1] < -0.0015:
-						order = self.client.new_order(
-							symbol=symbol,
-							side='SELL',
-							type='MARKET',
-							quantity=quantity
-						)
-						print(order)
-						break
+		try:
+			if not entried:
+				if cumulative_returns[-1] > -0.002:
+					order = self.client.new_order(
+						symbol=symbol,
+						side='BUY',
+						type='MARKET',
+						quantity=quantity
+					)
+					# pprint(order)
+					print(f'Bought {float(order["fills"][0]["qty"])}{order["fills"][0]["commissionAsset"]} at {float(order["fills"][0]["price"])}')
+					pprint(self.getAccountInfo())
+					entried = True
+				else:
+					print('No Trade has been executed')
+			
+			if entried:
+				while True:
+					df = self.getData(symbol, '1m', 30)
+					since_buy = df.loc[df.index > pd.to_datetime(order['transactTime'], unit='ms')]
+					if len(since_buy) > 0:
+						since_buy_return = (since_buy.Open.pct_change() + 1).cumprod() - 1
+						if since_buy_return[-1] > 0.0015 or since_buy_return[-1] < -0.0015:
+							order = self.client.new_order(
+								symbol=symbol,
+								side='SELL',
+								type='MARKET',
+								quantity=quantity
+							)
+							# pprint(order)
+							print(f'Sold {float(order["fills"][0]["qty"])}{order["fills"][0]["commissionAsset"]} at {float(order["fills"][0]["price"])}')
+							pprint(self.getAccountInfo())
+							break
+		except KeyboardInterrupt:
+			order = self.client.new_order(
+				symbol=symbol,
+				side='SELL',
+				type='MARKET',
+				quantity=quantity
+			)
+			print(f'Sold {float(order["fills"][0]["qty"])}{order["fills"][0]["commissionAsset"]} at {float(order["fills"][0]["price"])}')
+			pprint(self.getAccountInfo())
 
 if __name__ == "__main__":
 	tradingBot = TradingBot(TEST_NET)
-	tradingBot.strategyTest('BTCUSDT', 0.1)
+	tradingBot.strategyTest('BTCUSDT', 0.01)
