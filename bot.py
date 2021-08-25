@@ -4,6 +4,7 @@ import traceback
 from pprint import pprint
 
 import pandas as pd
+import pandas_ta as ta
 from binance.spot import Spot
 from binance.websocket.spot.websocket_client import SpotWebsocketClient
 from dotenv import load_dotenv
@@ -38,7 +39,7 @@ class TradingBot:
 	def getAccountInfo(self):
 		return self.client.account()
 
-	def getData(self, symbol, interval, limit):
+	def getData(self, symbol, interval, limit=None):
 		frame = pd.DataFrame(self.client.klines(symbol.upper(), interval, limit=limit))
 		frame = frame.iloc[:,:6]
 		frame.columns = ['Time', 'Open', 'High', 'Low', 'Close', 'Volume']
@@ -47,6 +48,12 @@ class TradingBot:
 		frame = frame.astype(float)
 
 		return frame
+
+	def calculateRsi(self, symbol, interval, time_period):
+		df = self.getData(symbol, interval)
+		rsi_df = df.ta.rsi(close='Close', length=time_period)
+
+		return rsi_df
 
 	def strategyTest(self, symbol, quantity, entried=False):
 		'''
@@ -99,6 +106,13 @@ class TradingBot:
 			print(f'Sold {float(order["fills"][0]["qty"])}{order["fills"][0]["commissionAsset"]} at {float(order["fills"][0]["price"])}')
 			pprint(self.getAccountInfo())
 
+	def strategyOne(self):
+		'''
+		BUY: If current price is above 200 MA and 14 (4h) RSI < 45 and 7 (4h) RSI < 40
+		SELL: If 14 (4h) RSI > 65 and 7 (4h) RSI > 70 or price decreases by 1.5%
+		'''
+
 if __name__ == "__main__":
 	tradingBot = TradingBot(TEST_NET)
-	tradingBot.strategyTest('BTCUSDT', 0.01)
+	# tradingBot.strategyTest('BTCUSDT', 0.01)
+	print(tradingBot.calculateRsi('BTCUSDT', '4h', 10))
